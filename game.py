@@ -16,14 +16,14 @@ class Tank(pygame.sprite.Sprite):
         self.image = self.original_image
         self.rect = self.image.get_rect(center = (pos_x, pos_y))
         self.angle = 0
-        self.angle_speed = 0.8
+        self.angle_speed = 1
         self.speed = 1
+        self.bullets_fired = 0
 
         self.position = Vector2((pos_x, pos_y))
         self.direction = Vector2(0, 1)
     
     def rotate(self, right_direction):
-        print(self.direction)
         if self.angle_speed != 0:
             self.direction.rotate_ip(self.angle_speed) if right_direction else self.direction.rotate_ip(-self.angle_speed)
             self.angle += self.angle_speed if right_direction else -self.angle_speed
@@ -47,12 +47,13 @@ class Tank(pygame.sprite.Sprite):
         # self.rect.x += round(self.speed*math.sin(-self.angle*math.pi/180))
     
     def fire_bullet(self, facing_down):
+        self.bullets_fired += 1
         return Bullet(self.parent_screen, self.rect.x + round(self.image.get_width()/2), 
             self.rect.y + round(self.image.get_height()/2), self.direction, facing_down)
     
     def reload(self):
         # return Clip(self.rect.x + round(self.image.get_width()/2), self.rect.y+50, (0, 0, 255))
-        return Clip(self.rect, (0, 0, 255))
+        return Clip(self, self.rect, (0, 0, 255))
 
 
 class Bullet(pygame.sprite.Sprite):
@@ -66,7 +67,7 @@ class Bullet(pygame.sprite.Sprite):
         self.image = pygame.Surface((6, 6))
         self.image.fill((0, 0, 0))
         self.rect = self.image.get_rect(center = (pos_x, pos_y))
-        self.speed = 2
+        self.speed = 2.2
     
     def update(self):
         self.position += self.direction * self.speed if self.facing_down else -self.direction * self.speed
@@ -78,13 +79,14 @@ class Bullet(pygame.sprite.Sprite):
 
 
 class Clip(pygame.sprite.Sprite):
-    def __init__(self, rect, color):
+    def __init__(self, tank: Tank, rect, color):
         super().__init__()
 
         self.image = pygame.Surface((50, 10))
         self.image.fill(color)
         self.rect = rect
         self.progress = 0
+        self.tank = tank
 
     def update(self, rect):
         self.progress += 0.1
@@ -92,6 +94,7 @@ class Clip(pygame.sprite.Sprite):
         self.image = pygame.Surface((50-self.progress, 5))
         self.rect = rect
         if self.progress == 50:
+            self.tank.bullets_fired = 0
             self.kill()
 
 
@@ -112,6 +115,8 @@ class Game:
         self.red_bullet_group = pygame.sprite.Group()
         self.clip_blue_group = pygame.sprite.GroupSingle()
         self.clip_red_group = pygame.sprite.GroupSingle()
+        self.blue_bullets_fired = 0
+        self.red_bullets_fired = 0
         # all_groups = [self.tank_group, self.blue_bullet_group, self.red_bullet_group, 
         #     self.clip_blue_group, self.clip_red_group]
     
@@ -123,18 +128,13 @@ class Game:
                 if event.type == KEYDOWN:
                     if event.key == K_ESCAPE:
                         running = False
-                    if len(self.clip_blue_group) == 0:
-                        if event.key == K_SPACE:
-                            if len(self.blue_bullet_group) < 5:
-                                self.blue_bullet_group.add(self.blue_tank.fire_bullet(True))
-                            else:
-                                self.clip_blue_group.add(self.blue_tank.reload())
-                    if len(self.clip_red_group) == 0:
-                        if event.key == K_q:
-                            if len(self.red_bullet_group) < 5:
-                                self.red_bullet_group.add(self.red_tank.fire_bullet(False))
-                            else:
-                                self.clip_red_group.add(self.red_tank.reload())
+                    if event.key == K_SPACE:
+                        if self.blue_tank.bullets_fired < 5:
+                            self.blue_bullet_group.add(self.blue_tank.fire_bullet(True))
+                            print(self.blue_tank.bullets_fired)
+                    if event.key == K_q:
+                        if self.red_tank.bullets_fired < 5:
+                            self.red_bullet_group.add(self.red_tank.fire_bullet(False))
                 elif event.type == QUIT:
                     running = False
             if pygame.key.get_pressed()[K_UP]:
@@ -153,9 +153,20 @@ class Game:
                 self.red_tank.rotate(True)
             if pygame.key.get_pressed()[K_a]:
                 self.red_tank.rotate(False)
+            
+            if self.blue_tank.bullets_fired >= 5 and len(self.clip_blue_group) == 0:
+                self.clip_blue_group.add(self.blue_tank.reload())
+            if self.red_tank.bullets_fired >= 5 and len(self.clip_red_group) == 0:
+                self.clip_red_group.add(self.red_tank.reload())  
 
-            if pygame.sprite.spritecollide(self.blue_tank, self.red_bullet_group, True):
-                print("BLUE HIT!")
+            bullet_that_hit = pygame.sprite.spritecollide(self.blue_tank, self.red_bullet_group, False)
+            if bullet_that_hit:
+                # if (self.blue_tank.position.x-int(self.blue_tank.rect.width/2)+7 < \
+                #     bullet_that_hit[0].position.x < self.blue_tank.position.x+int(self.blue_tank.rect.width/2)-7):
+                if (self.blue_tank.position.x-18 < \
+                    bullet_that_hit[0].position.x < self.blue_tank.position.x+18):
+                    print("BLUE HIT!")
+                    bullet_that_hit[0].kill()
             if pygame.sprite.spritecollide(self.red_tank, self.blue_bullet_group, True):
                 print("RED HIT!")
             
