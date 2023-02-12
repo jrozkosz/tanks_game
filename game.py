@@ -97,6 +97,16 @@ class Clip(pygame.sprite.Sprite):
             self.tank.bullets_fired = 0
             self.kill()
 
+class GameOver(pygame.sprite.Sprite):
+    def __init__(self, blue_won: bool, pos_x, pos_y):
+        super().__init__()
+
+        if blue_won:
+            self.image = pygame.image.load(f"resources/blue_won.png").convert_alpha()
+        else:
+            self.image = pygame.image.load(f"resources/red_won.png").convert_alpha()
+        self.rect = self.image.get_rect(center = (pos_x, pos_y))
+
 
 
 
@@ -104,6 +114,9 @@ class Game:
     def __init__(self):
         pygame.init()
         self.running = False
+        self.initialize_game()
+    
+    def initialize_game(self):
         self.surface = pygame.display.set_mode((700, 600))
         self.surface.fill((255, 255, 255))
         pygame.display.flip()
@@ -118,8 +131,10 @@ class Game:
         self.clip_red_group = pygame.sprite.GroupSingle()
         self.blue_bullets_fired = 0
         self.red_bullets_fired = 0
-        # all_groups = [self.tank_group, self.blue_bullet_group, self.red_bullet_group, 
-        #     self.clip_blue_group, self.clip_red_group]
+        self.red_won = False
+        self.blue_won = False
+        self.game_over_group = pygame.sprite.GroupSingle()
+
 
     def handle_reloading(self):
         if self.blue_tank.bullets_fired >= 5 and len(self.clip_blue_group) == 0:
@@ -128,16 +143,26 @@ class Game:
             self.clip_red_group.add(self.red_tank.reload())
     
     def handle_collisions(self):
-        bullet_that_hit = pygame.sprite.spritecollide(self.blue_tank, self.red_bullet_group, False)
-        if bullet_that_hit:
+        red_bullet_that_hit = pygame.sprite.spritecollide(self.blue_tank, self.red_bullet_group, False)
+        if red_bullet_that_hit:
             # if (self.blue_tank.position.x-int(self.blue_tank.rect.width/2)+7 < \
             #     bullet_that_hit[0].position.x < self.blue_tank.position.x+int(self.blue_tank.rect.width/2)-7):
-            if (self.blue_tank.position.x-18 < \
-                bullet_that_hit[0].position.x < self.blue_tank.position.x+18):
+            if (self.blue_tank.position.x-int(0.7*(self.blue_tank.rect.width/2)) < \
+                    red_bullet_that_hit[0].position.x < self.blue_tank.position.x+int(0.7*(self.blue_tank.rect.width/2)) and
+                    self.blue_tank.position.y-int(0.7*(self.blue_tank.rect.width/2)) < \
+                    red_bullet_that_hit[0].position.y < self.blue_tank.position.y+int(0.7*(self.blue_tank.rect.width/2))):
                 print("BLUE HIT!")
-                bullet_that_hit[0].kill()
-        if pygame.sprite.spritecollide(self.red_tank, self.blue_bullet_group, True):
-            print("RED HIT!")
+                red_bullet_that_hit[0].kill()
+                self.red_won = True
+        blue_bullet_that_hit = pygame.sprite.spritecollide(self.red_tank, self.blue_bullet_group, False)
+        if blue_bullet_that_hit:
+            if (self.red_tank.position.x-int(0.7*(self.red_tank.rect.width/2)) < \
+                    blue_bullet_that_hit[0].position.x < self.red_tank.position.x+int(0.7*(self.red_tank.rect.width/2)) and
+                    self.red_tank.position.y-int(0.7*(self.red_tank.rect.width/2)) < \
+                    blue_bullet_that_hit[0].position.y < self.red_tank.position.y+int(0.7*(self.red_tank.rect.width/2))):
+                print("RED HIT!")
+                blue_bullet_that_hit[0].kill()
+                self.blue_won = True
     
     def draw_and_update(self):
         self.surface.fill((255, 255, 255))
@@ -160,7 +185,6 @@ class Game:
                 if event.key == K_SPACE:
                     if self.blue_tank.bullets_fired < 5:
                         self.blue_bullet_group.add(self.blue_tank.fire_bullet(True))
-                        print(self.blue_tank.bullets_fired)
                 if event.key == K_q:
                     if self.red_tank.bullets_fired < 5:
                         self.red_bullet_group.add(self.red_tank.fire_bullet(False))
@@ -183,6 +207,28 @@ class Game:
         if pygame.key.get_pressed()[K_a]:
             self.red_tank.rotate(False)
     
+    def handle_restart(self):
+        restart = False
+        if self.blue_won:
+            self.game_over_group.add(GameOver(True, 350, 300))
+        elif self.red_won:
+            self.game_over_group.add(GameOver(False, 350, 300))
+        self.game_over_group.draw(self.surface)
+        self.game_over_group.update()
+        pygame.display.flip()
+        while not restart:
+            for event in pygame.event.get():
+                if event.type == KEYDOWN:
+                    if event.key == K_ESCAPE:
+                        self.running = False
+                        restart = True
+                    if event.key == K_r:
+                        restart = True
+                        self.initialize_game()
+                elif event.type == QUIT:
+                    self.running = False
+                    restart = True
+    
     def run(self):
         self.running = True
         clock = pygame.time.Clock()
@@ -191,4 +237,6 @@ class Game:
             self.handle_reloading()
             self.handle_collisions()
             self.draw_and_update()
+            if self.blue_won or self.red_won:
+                self.handle_restart()
             clock.tick(120)
